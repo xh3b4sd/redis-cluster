@@ -1,7 +1,7 @@
 # redis cluster
 
 ### usage
-```bash
+```
 $ ./cluster help
 test redis cluster using multiple docker containers
 
