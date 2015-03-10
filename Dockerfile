@@ -35,7 +35,6 @@ RUN (cd /redis && make)
 RUN mkdir -p /var/run/redis/
 
 ADD ./main.sh /var/run/redis/main.sh
-ADD ./redis_master.conf /var/run/redis/redis_master.conf
-ADD ./redis_slave.conf /var/run/redis/redis_slave.conf
+ADD ./redis.conf /var/run/redis/redis.conf
 
 ENTRYPOINT [ "/var/run/redis/main.sh" ]
