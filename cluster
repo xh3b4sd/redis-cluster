@@ -34,23 +34,23 @@ create_cluster () {
 }
 
 stop_containers () {
-	docker rm -f master-01
-	docker rm -f master-02
-	docker rm -f master-03
-	docker rm -f slave-04
-	docker rm -f slave-05
-	docker rm -f slave-06
+  docker rm -f master-01
+  docker rm -f master-02
+  docker rm -f master-03
+  docker rm -f slave-04
+  docker rm -f slave-05
+  docker rm -f slave-06
 }
 
 build_image () {
-	docker build -t zyndiecate/redis-cluster .
+  docker build -t zyndiecate/redis-cluster .
 }
 
 connect_redis () {
   PORT=7002
   [ "$ARG" != "" ] && PORT=$ARG
 
-	docker run -it --rm --net=host dockerfile/redis redis-cli -c -p $PORT
+  docker run -it --rm --net=host dockerfile/redis redis-cli -c -p $PORT
 }
 
 test_failover () {
