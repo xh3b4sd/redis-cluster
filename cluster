@@ -1,0 +1,102 @@
+#!/bin/bash
+
+COMMAND=$1
+ARG=$2
+
+create_cluster () {
+  echo "create members"
+  docker run -d --net=host --name=master-01 zyndiecate/redis-cluster master 7001
+  docker run -d --net=host --name=master-02 zyndiecate/redis-cluster master 7002
+  docker run -d --net=host --name=master-03 zyndiecate/redis-cluster master 7003
+  docker run -d --net=host --name=slave-04 zyndiecate/redis-cluster master 7004
+  docker run -d --net=host --name=slave-05 zyndiecate/redis-cluster master 7005
+  docker run -d --net=host --name=slave-06 zyndiecate/redis-cluster master 7006
+
+  echo "join members"
+  docker run -it --rm --net=host dockerfile/redis redis-cli -c -p 7001 cluster meet 127.0.0.1 7002
+  docker run -it --rm --net=host dockerfile/redis redis-cli -c -p 7001 cluster meet 127.0.0.1 7003
+  docker run -it --rm --net=host dockerfile/redis redis-cli -c -p 7001 cluster meet 127.0.0.1 7004
+  docker run -it --rm --net=host dockerfile/redis redis-cli -c -p 7001 cluster meet 127.0.0.1 7005
+  docker run -it --rm --net=host dockerfile/redis redis-cli -c -p 7001 cluster meet 127.0.0.1 7006
+
+  echo "create slots"
+  docker run -it --rm --net=host dockerfile/redis /bin/sh -c "for i in $(eval 'echo {0..5500}'); do redis-cli -c -p 7001 cluster addslots \$i; done" > /dev/null
+  docker run -it --rm --net=host dockerfile/redis /bin/sh -c "for i in $(eval 'echo {5501..11000}'); do redis-cli -c -p 7002 cluster addslots \$i; done" > /dev/null
+  docker run -it --rm --net=host dockerfile/redis /bin/sh -c "for i in $(eval 'echo {11001..16383}'); do redis-cli -c -p 7003 cluster addslots \$i; done" > /dev/null
+
+  echo "replicate masters"
+  MASTER_ID_01=$(docker run -it --rm --net=host dockerfile/redis redis-cli -c -p 7001 cluster nodes | grep 7001 | awk '{print $1}')
+  docker run -it --rm --net=host dockerfile/redis redis-cli -c -p 7004 cluster replicate $MASTER_ID_01
+  MASTER_ID_02=$(docker run -it --rm --net=host dockerfile/redis redis-cli -c -p 7001 cluster nodes | grep 7002 | awk '{print $1}')
+  docker run -it --rm --net=host dockerfile/redis redis-cli -c -p 7005 cluster replicate $MASTER_ID_02
+  MASTER_ID_03=$(docker run -it --rm --net=host dockerfile/redis redis-cli -c -p 7001 cluster nodes | grep 7003 | awk '{print $1}')
+  docker run -it --rm --net=host dockerfile/redis redis-cli -c -p 7006 cluster replicate $MASTER_ID_03
+}
+
+stop_containers () {
+	docker rm -f master-01
+	docker rm -f master-02
+	docker rm -f master-03
+	docker rm -f slave-04
+	docker rm -f slave-05
+	docker rm -f slave-06
+}
+
+build_image () {
+	docker build -t zyndiecate/redis-cluster .
+}
+
+connect_redis () {
+  PORT=7002
+  [ "$ARG" != "" ] && PORT=$ARG
+
+	docker run -it --rm --net=host dockerfile/redis redis-cli -c -p $PORT
+}
+
+test_failover () {
+  docker rm -f master-01
+}
+
+# join_slave starts master-01 (was removed during failover) and joins it as
+# slave to slave-04 (is the new master because of the failover).
+join_slave () {
+  echo "create new node"
+  docker run -d --net=host --name=master-01 zyndiecate/redis-cluster master 7001
+  docker run -it --rm --net=host dockerfile/redis redis-cli -c -p 7002 cluster meet 127.0.0.1 7001
+
+  echo "replicate failover"
+  SLAVE_ID_04=$(docker run -it --rm --net=host dockerfile/redis redis-cli -c -p 7001 cluster nodes | grep 7004 | awk '{print $1}')
+  docker run -it --rm --net=host dockerfile/redis redis-cli -c -p 7001 cluster replicate $SLAVE_ID_04
+}
+
+# cluster_info just shows information about the cluster
+cluster_info () {
+  docker run -it --rm --net=host dockerfile/redis redis-cli -c -p 7002 cluster info
+}
+
+show_help () {
+  echo "test redis cluster using multiple docker containers
+
+COMMANDS:
+    create            create a test cluster using multiple docker containers
+    stop              stop all cluster related docker containers
+    build             build the necessary docker image
+    connect [port]    connect to a redis-cli to interact to the cluster
+    failover          test failover by removing a master node from the cluster
+    join              join a new node to the cluster after failover to replicate
+    info              show cluster information"
+}
+
+[ "$COMMAND" == "" ] && echo "missing command" && exit 1
+
+[ $COMMAND = "create" ] && create_cluster
+[ $COMMAND = "stop" ] && stop_containers
+[ $COMMAND = "build" ] && build_image
+[ $COMMAND = "connect" ] && connect_redis
+[ $COMMAND = "failover" ] && test_failover
+[ $COMMAND = "join" ] && join_slave
+[ $COMMAND = "info" ] && cluster_info
+
+[ $COMMAND = "help" ] && show_help
+[ $COMMAND = "--help" ] && show_help
+[ $COMMAND = "-h" ] && show_help
