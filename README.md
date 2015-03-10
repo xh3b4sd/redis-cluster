@@ -218,3 +218,17 @@ c58e895798a2b1c28c1947f15d6f002d8906b8d5 127.0.0.1:7001 slave 9581406e991c371ec8
 9bbbdf24336d791c9585310819d72069b167862a 127.0.0.1:7002 myself,master - 0 0 1 connected 5501-11000
 c18149f6a88f2e0e71f7105b7c6b6ad5c4aab8b8 :0 master,fail,noaddr - 1426004903123 1426004902113 0 disconnected
 ```
+
+##### stop cluster
+
+To cleanup just stop all containers and your environment should be clean again.
+
+```bash
+$ ./cluster stop
+master-01
+master-02
+master-03
+slave-04
+slave-05
+slave-06
+```
